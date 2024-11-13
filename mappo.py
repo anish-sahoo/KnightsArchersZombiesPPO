@@ -52,7 +52,7 @@ class CriticNetwork(nn.Module):
         return self.network(x)
 
 class MAPPO:
-    def __init__(self, env, hidden_dim=64, lr=3e-4, gamma=0.99, epsilon=0.2):
+    def __init__(self, env, hidden_dim=64, lr=3e-3, gamma=0.99, epsilon=0.2):
         self.env = env
         self.gamma = gamma
         self.epsilon = epsilon
@@ -221,14 +221,14 @@ def main():
     env = knights_archers_zombies_v10.parallel_env(
         num_archers=2,
         num_knights=2,
-        max_zombies=50,
+        max_zombies=100,
+        line_death=True,
         killable_knights=True,
         killable_archers=True,
-        line_death=True,
     )
     
     mappo = MAPPO(env)
-    rewards, knight_r, archer_r, actor_l, critic_l = mappo.train(num_episodes=500, max_steps=1000)
+    rewards, knight_r, archer_r, actor_l, critic_l = mappo.train(num_episodes=20000, max_steps=20000)
     plt.plot(rewards, label="Total Average Reward")
     plt.plot(knight_r, label="Knight Average Reward")
     plt.plot(archer_r, label="Archer Average Reward")
