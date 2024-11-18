@@ -125,7 +125,7 @@ def train(timesteps=1_000_000):
     pbar.close()
     return actor, critic, average_returns
 
-actor, critic, average_returns = train(1_000_000)
+actor, critic, average_returns = train(500_000)
 
 # Save models and results
 torch.save(actor.state_dict(), "actor.pth")
