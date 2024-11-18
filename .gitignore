@@ -1,2 +1,11 @@
 .venv/
 .ruff_cache/
+
+**/*.aux
+**/*.log
+**/*.out
+**/*.toc
+**/*.fls
+**/*.fdb_latexmk
+**/*.bbl
+**/*.synctex.gz
