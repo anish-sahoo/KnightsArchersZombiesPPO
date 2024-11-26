@@ -1,13 +1,13 @@
 from pettingzoo.butterfly import knights_archers_zombies_v10
 
 env = knights_archers_zombies_v10.parallel_env(
-    render_mode="human",
+    render_mode=None,
     vector_state=False,
     num_archers=4,
     num_knights=4,
-    max_zombies=10,
-    
+    max_zombies=50,
 )
+
 observations, infos = env.reset()
 a = 0
 reward = 0
