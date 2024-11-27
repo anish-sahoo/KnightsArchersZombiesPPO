@@ -11,9 +11,9 @@ from tqdm import tqdm
 torch.autograd.set_detect_anomaly(True)
 
 # Check if CUDA is available and set the device
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# print(f"Using device: {device}")
-device = torch.device("cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+# device = torch.device("cpu")
 
 # PopArt normalization (unchanged)
 class PopArt:
@@ -246,11 +246,11 @@ with tqdm(total=total_steps, desc="Training") as pbar:
                 new_log_probs = dist.log_prob(actions_batch)  # Shape: [batch_size, seq_len]
 
                 # Reshape tensors for loss computation
-                new_log_probs = new_log_probs.reshape(-1).clone()    # Shape: [batch_size * seq_len]
-                advantages_batch = advantages_batch.reshape(-1).clone()
-                returns_batch = returns_batch.reshape(-1).clone()
-                value_preds = value_preds.reshape(-1).clone()
-                old_log_probs_batch = old_log_probs_batch.reshape(-1).clone()
+                new_log_probs = new_log_probs.reshape(-1)    # Shape: [batch_size * seq_len]
+                advantages_batch = advantages_batch.reshape(-1)
+                returns_batch = returns_batch.reshape(-1)
+                value_preds = value_preds.reshape(-1)
+                old_log_probs_batch = old_log_probs_batch.reshape(-1)
 
                 # Compute ratio and surrogate losses
                 ratio = torch.exp(new_log_probs - old_log_probs_batch)
