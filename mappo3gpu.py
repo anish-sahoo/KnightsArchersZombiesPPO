@@ -5,7 +5,7 @@ import torch.optim as optim
 from torch.distributions import Categorical
 import numpy as np
 from pettingzoo.butterfly import knights_archers_zombies_v10
-from tqdm import tqdm  # Import tqdm for progress bars
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -147,6 +147,11 @@ with tqdm(total=stepmax, desc="Training Steps") as pbar:
                 if all(terminations.values()) or all(truncations.values()):
                     break
             D.append(trajectory)
+            
+            # todo: do not append the entire episode, only k steps
+            # this will fix the unnecessary use of ram
+            # also incorporate the gae calculation here and popart normalization
+            
             batch_rewards.append(episode_reward)
         episode_rewards.append(np.mean(batch_rewards))
         # Inner loop for minibatch updates with tqdm
