@@ -115,6 +115,7 @@ with tqdm(total=stepmax, desc="Training Steps") as pbar:
     while step <= stepmax:
         D = []
         # Inner loop to collect trajectories
+        batch_rewards = []
         for _ in range(batch_size):
             trajectory = []
             env.reset()
@@ -146,8 +147,8 @@ with tqdm(total=stepmax, desc="Training Steps") as pbar:
                 if all(terminations.values()) or all(truncations.values()):
                     break
             D.append(trajectory)
-            episode_rewards.append(episode_reward)
-
+            batch_rewards.append(episode_reward)
+        episode_rewards.append(np.mean(batch_rewards))
         # Inner loop for minibatch updates with tqdm
         with tqdm(total=min(minibatch_count, len(D)), desc="Minibatch Updates", leave=False) as mb_pbar:
             for _ in range(min(minibatch_count, len(D))):
