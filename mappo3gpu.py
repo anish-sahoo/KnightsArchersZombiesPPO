@@ -77,6 +77,15 @@ class Critic(nn.Module):
 
 
 
+# Training Loop
+stepmax = 50
+batch_size = 4
+gamma = 0.99
+gae_lambda = 0.95
+minibatch_count = 2
+step = 0
+lr = 0.00001
+
 # Initialize environment and models
 env = knights_archers_zombies_v10.parallel_env(
     render_mode=None,
@@ -88,17 +97,6 @@ env = knights_archers_zombies_v10.parallel_env(
     max_cycles=500,
 )
 observations, infos = env.reset()
-
-
-# Training Loop
-stepmax = 50
-batch_size = 4
-gamma = 0.99
-gae_lambda = 0.95
-minibatch_count = 2
-step = 0
-max_cycles = 300
-lr = 0.00001
 
 # actor = Actor(env.action_spaces['archer_0'].n).to(device)
 actor = Actor(env.action_space('archer_0').n).to(device)
@@ -136,7 +134,7 @@ with tqdm(total=stepmax, desc="Training Steps") as pbar:
                     actions[agent] = action.item()
 
                 observations, rewards, terminations, truncations, infos = env.step(actions)
-                rewards = {agent: reward if reward > 0 else -1 for agent, reward in rewards.items()}
+                rewards = {agent: reward*100 if reward > 0 else -1 for agent, reward in rewards.items()}
                 episode_reward += sum(rewards.values())
                 for agent in env.agents:
                     trajectory.append({
@@ -162,13 +160,25 @@ with tqdm(total=stepmax, desc="Training Steps") as pbar:
 
                 values = critic(obs).squeeze()
                 returns = []
-                advantages = []
+                # advantages = [] # original without gae
                 R = 0
                 for reward, done in zip(reversed(rewards), reversed(dones)):
                     R = reward + gamma * R * (1 - done)
                     returns.insert(0, R)
                 returns = torch.tensor(returns).to(device)
-                advantages = returns - values.detach()
+                # advantages = returns - values.detach() # original without gae
+                
+                # start of new calculation with gae
+                advantages = []
+                gae = 0
+                value_next = 0
+                for reward, done, value in zip(reversed(rewards), reversed(dones), reversed(values)):
+                    delta = reward + gamma * value_next * (1 - done) - value
+                    gae = delta + gamma * gae_lambda * (1 - done) * gae
+                    advantages.insert(0, gae)
+                    value_next = value
+                advantages = torch.tensor(advantages).to(device)
+                # end of new calculation with gae
 
                 action_probs = actor(obs)
                 action_log_probs = torch.log(action_probs.gather(1, actions.unsqueeze(1)).squeeze())
