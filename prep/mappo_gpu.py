@@ -8,26 +8,14 @@ import random
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
+import PopArt
+
 torch.autograd.set_detect_anomaly(True)
 
 # Check if CUDA is available and set the device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 # device = torch.device("cpu")
-
-# PopArt normalization (unchanged)
-class PopArt:
-    def __init__(self, beta=0.0003, epsilon=1e-5):
-        self.mean = 0.0
-        self.sq_mean = 0.0
-        self.beta = beta
-        self.epsilon = epsilon
-
-    def normalize(self, x):        
-        self.mean = self.beta * np.mean(x) + (1 - self.beta) * self.mean
-        self.sq_mean = self.beta * np.mean(x ** 2) + (1 - self.beta) * self.sq_mean
-        std = np.sqrt(self.sq_mean - self.mean ** 2 + self.epsilon)
-        return (x - self.mean) / std
 
 # Actor and Critic networks with CNN moved to device
 class ActorCritic(nn.Module):
