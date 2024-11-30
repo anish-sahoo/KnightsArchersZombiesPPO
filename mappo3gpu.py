@@ -116,8 +116,8 @@ gae_lambda = 0.95
 minibatch_count = 4
 step = 0
 lr = 0.00001
-T = 100
-k = 10
+T = 500
+k = 20
 beta=0.0003
 epsilon=1e-5
 
