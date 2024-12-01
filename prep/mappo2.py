@@ -9,7 +9,7 @@ import random
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-import PopArt
+import prep.PopArt as PopArt
 # Append step data to trajectories
                 
             # todo: compute advantage estimate using gae on trajectories and popart

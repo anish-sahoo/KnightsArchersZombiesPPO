@@ -7,7 +7,7 @@ import numpy as np
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from PopArt import PopArt
+from prep.PopArt import PopArt
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

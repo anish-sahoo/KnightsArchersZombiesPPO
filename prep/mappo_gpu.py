@@ -8,7 +8,7 @@ import random
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-import PopArt
+import prep.PopArt as PopArt
 
 torch.autograd.set_detect_anomaly(True)
 
