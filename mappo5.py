@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from tqdm import tqdm
@@ -42,9 +43,9 @@ class ActorCritic(nn.Module):
         self.conv3 = nn.Conv2d(64, 64, 3, stride=1)  # Output: 7x7x64
         
         # Calculate flattened size: 7 * 7 * 64 = 3136
-        self.fc = nn.Linear(3136, 512)
-        self.actor = nn.Linear(512, action_dim)
-        self.critic = nn.Linear(512, 1)
+        self.fc = nn.Linear(3136, 256)
+        self.actor = nn.Linear(256, action_dim)
+        self.critic = nn.Linear(256, 1)
         
         self.to(device)
         
@@ -103,12 +104,15 @@ def compute_gae(rewards, values, dones, gamma=0.99, gae_lambda=0.95):
     returns = advantages + torch.tensor(values, device=device)
     return advantages, returns
 
-def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entropy_coef=0.01, epochs=4, minibatch_size=32):
+def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entropy_coef=0.02, epochs=4, minibatch_size=32):
     batch = buffer.get_batch()
     
-    np.random.shuffle(batch)
+    # np.random.shuffle(batch)
     
-    batch = batch[:minibatch_size]  # Mini-batch instead of whole buffer ---------------------------this is new
+    # batch = batch[:minibatch_size]  # Mini-batch instead of whole buffer ---------------------------this is new
+    
+    indices = np.random.choice(len(batch), minibatch_size, replace=False)
+    batch = [batch[i] for i in indices]
     
     # Convert states list to numpy array first for faster tensor conversion
     states = np.array([t['state'] for t in batch])
@@ -153,7 +157,7 @@ def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entro
     
     return policy_loss.item(), value_loss.item(), entropy.item()
 
-def main():
+def main(hyperparameters):
     # Environment setup
     env = knights_archers_zombies_v10.parallel_env(
         render_mode=None,
@@ -167,22 +171,41 @@ def main():
     env = ss.resize_v1(env, x_size=84, y_size=84)  # Resize to 84x84
     env = ss.color_reduction_v0(env, mode='full')  # Grayscale
     
-    # Training parameters
-    max_timesteps = 6000 #500
-    max_steps = 600
-    buffer = ReplayBuffer(max_size=20000) #max_size=3000)
-    lr = 1e-6 #3e-4 #0.001 #3e-4
+    # # Training parameters
+    # max_timesteps = 10000 #500
+    # max_steps = 500
+    # buffer = ReplayBuffer(max_size=8000) #max_size=3000)
+    # lr = 1e-4 #3e-4 #0.001 #3e-4
+    # reward_scale = 10
+    # penalty = 0
+    # epochs = 6 # 8
+    # minibatch_size = 256
+    
+    max_timesteps = hyperparameters['max_timesteps']
+    max_steps = hyperparameters['max_steps']
+    buffer = ReplayBuffer(max_size=hyperparameters['buffer_size'])
+    lr = hyperparameters['lr']
+    reward_scale = hyperparameters['reward_scale']
+    penalty = hyperparameters['penalty']
+    
+    # ppo update hyperparameters
+    epochs = hyperparameters['epochs']
+    minibatch_size = hyperparameters['minibatch_size']
+    clip_epsilon = hyperparameters['clip_epsilon']
+    value_coef = hyperparameters['value_coef']
+    entropy_coef = hyperparameters['entropy_coef']
+    
+    # gae hyperparameters
+    gamma = hyperparameters['gamma']
+    gae_lambda = hyperparameters['gae_lambda']
+    
+    writer = SummaryWriter(log_dir="./runs/mappo")
     
     model = ActorCritic(env.action_space('archer_0').n)# , device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     
     episode_rewards = []
     metrics = MetricsTracker()
-    
-    reward_scale = 100
-    penalty = 0
-    epochs = 12 # 8
-    minibatch_size = 2048
     
     # plot episode numbers will be much smaller as it takes multiple timesteps to complete an episode (max out the replay buffer and then do an update)
 
@@ -192,7 +215,7 @@ def main():
         
         for step in range(max_steps):
             actions = {}
-            step_transitions = []  # Temporary storage for this step's transitions
+            trajectory = []  # Temporary storage for this step's transitions
             
             # Get actions for all agents
             for agent in env.agents:
@@ -206,7 +229,7 @@ def main():
                 actions[agent] = action.item()
                 
                 # Store transition in temporary list
-                step_transitions.append({
+                trajectory.append({
                     'state': observations[agent],
                     'action': action.item(),
                     'log_prob': log_prob.item(),
@@ -219,9 +242,9 @@ def main():
             
             # Update transitions with rewards and dones and push to buffer
             for i, agent in enumerate(env.agents):
-                step_transitions[i]['reward'] = rewards[agent] * reward_scale - penalty
-                step_transitions[i]['done'] = terminations[agent] or truncations[agent]
-                buffer.push(step_transitions[i])
+                trajectory[i]['reward'] = rewards[agent] * reward_scale - penalty
+                trajectory[i]['done'] = terminations[agent] or truncations[agent]
+                buffer.push(trajectory[i])
             
             if all(terminations.values()) or all(truncations.values()):
                 break
@@ -229,8 +252,17 @@ def main():
             observations = next_observations
         
         # PPO update
-        if len(buffer.buffer) >= minibatch_size + 10: #buffer.max_size:
-            policy_loss, value_loss, entropy = ppo_update(model, optimizer, buffer, epochs=epochs, minibatch_size=minibatch_size)
+        if len(buffer.buffer) > minibatch_size: #buffer.max_size: 
+            policy_loss, value_loss, entropy = ppo_update(
+                model, 
+                optimizer, 
+                buffer, 
+                epochs=epochs, 
+                minibatch_size=minibatch_size, 
+                clip_epsilon=clip_epsilon, 
+                value_coef=value_coef, 
+                entropy_coef=entropy_coef
+            )
             # Calculate mean values and advantages for the episode
             with torch.no_grad():
                 # Convert list of states to numpy array first
@@ -247,7 +279,10 @@ def main():
                 mean_value = values.mean().item()
                 advantages, _ = compute_gae([t['reward'] for t in buffer.buffer], 
                                         values.cpu().numpy(), 
-                                        [t['done'] for t in buffer.buffer])
+                                        [t['done'] for t in buffer.buffer],
+                                        gamma=gamma,
+                                        gae_lambda=gae_lambda
+                                )
                 mean_advantage = advantages.mean().item()
 
             metrics.add_metrics(
@@ -260,21 +295,69 @@ def main():
                 mean_advantages=mean_advantage
             )
             
-            # buffer.clear()
+            writer.add_scalar('Loss/Policy', policy_loss, timestep)
+            writer.add_scalar('Loss/Value', value_loss, timestep)
+            writer.add_scalar('Loss/Entropy', entropy, timestep)
+            writer.add_scalar('Values/MeanValue', mean_value, timestep)
+            writer.add_scalar('Values/MeanAdvantage', mean_advantage, timestep)
+            writer.add_scalar('Rewards/Episode', episode_reward, timestep)
+            writer.add_scalar('EpisodeLength', step + 1, timestep)
+            
+            buffer.clear()
         
         episode_rewards.append(episode_reward)
     
         # Plotting
         if timestep % 10 == 0 and timestep > 0:
-            metrics.plot_metrics(save_individual=False)
-            metrics.plot_metrics_smooth(save_individual=False)
+            metrics.plot_metrics(save_individual=True)
+            metrics.plot_metrics_smooth(save_individual=True)
+            metrics.save_metrics()
             
-        if timestep % 500 == 0 and timestep > 0:
+        if timestep % 1000 == 0 and timestep > 0:
             if not os.path.exists('./models'):
                 os.makedirs('./models')
             
             torch.save(model.state_dict(), f'./models/mappo_model_episode_{timestep}_{time.time()}.pth')
             metrics.save_metrics()
+            
+        if timestep % 200 == 0 and timestep > 0:
+            # Evaluate policy performance
+            eval_rewards = []
+            eval_steps = []
+            eval_episodes = 10
+
+            for _ in range(eval_episodes):
+                eval_observations, _ = env.reset()
+                eval_episode_reward = 0
+                eval_episode_steps = 0
+
+                while True:
+                    eval_actions = {}
+                    for agent in env.agents:
+                        eval_obs = torch.FloatTensor(eval_observations[agent]).to(device)
+                        with torch.no_grad():
+                            eval_action_probs, _ = model(eval_obs)
+                            eval_dist = Categorical(eval_action_probs)
+                            eval_action = eval_dist.sample()
+                        eval_actions[agent] = eval_action.item()
+
+                    eval_next_observations, eval_rewards_dict, eval_terminations, eval_truncations, _ = env.step(eval_actions)
+                    eval_episode_reward += sum(eval_rewards_dict.values())
+                    eval_episode_steps += 1
+
+                    if all(eval_terminations.values()) or all(eval_truncations.values()):
+                        break
+
+                    eval_observations = eval_next_observations
+
+                eval_rewards.append(eval_episode_reward)
+                eval_steps.append(eval_episode_steps)
+
+            avg_eval_reward = np.mean(eval_rewards)
+            avg_eval_steps = np.mean(eval_steps)
+
+            writer.add_scalar('Evaluation/AverageReward', avg_eval_reward, timestep)
+            writer.add_scalar('Evaluation/AverageSteps', avg_eval_steps, timestep)
 
     env.close()
     if not os.path.exists('./models'):
@@ -284,7 +367,22 @@ def main():
     metrics.save_metrics()
     
 if __name__ == "__main__":
-    main()
+    hyperparameters = {
+        'max_timesteps': 10000,
+        'max_steps': 500,
+        'buffer_size': 8000,
+        'lr': 1e-4,
+        'reward_scale': 10,
+        'penalty': 0,
+        'epochs': 6,
+        'minibatch_size': 256,
+        'clip_epsilon': 0.2,
+        'value_coef': 0.5,
+        'entropy_coef': 0.02,
+        'gamma': 0.99,
+        'gae_lambda': 0.95
+    }
+    main(hyperparameters=hyperparameters)
     
     
 # first run hyperparameters
