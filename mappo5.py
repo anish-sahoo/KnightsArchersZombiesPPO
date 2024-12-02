@@ -7,7 +7,8 @@ import numpy as np
 from pettingzoo.butterfly import knights_archers_zombies_v10
 from tqdm import tqdm
 import supersuit as ss
-import matplotlib.pyplot as plt
+import os
+import time
 
 # from ReplayBuffer import ReplayBuffer 
 # from ActorCritic import ActorCritic
@@ -174,8 +175,13 @@ def compute_gae(rewards, values, dones, gamma=0.99, gae_lambda=0.95):
     returns = advantages + torch.tensor(values, device=device)
     return advantages, returns
 
-def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entropy_coef=0.01, epochs=4):
+# def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entropy_coef=0.01, epochs=4):
+def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entropy_coef=0.01, epochs=4, minibatch_size=32):
     batch = buffer.get_batch()
+    
+    np.random.shuffle(batch)
+    
+    batch = batch[:minibatch_size]  # Mini-batch instead of whole buffer ---------------------------this is new
     
     # Convert states list to numpy array first for faster tensor conversion
     states = np.array([t['state'] for t in batch])
@@ -208,7 +214,8 @@ def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entro
         surr2 = torch.clamp(ratio, 1-clip_epsilon, 1+clip_epsilon) * advantages
         policy_loss = -torch.min(surr1, surr2).mean()
         
-        value_loss = F.mse_loss(new_values.squeeze(), returns)
+        # value_loss = F.mse_loss(new_values.squeeze(), returns)
+        value_loss = F.huber_loss(new_values.squeeze(), returns, delta=10)
         
         loss = policy_loss + value_coef * value_loss - entropy_coef * entropy
         
@@ -234,20 +241,25 @@ def main():
     env = ss.color_reduction_v0(env, mode='full')  # Grayscale
     
     # Training parameters
-    max_episodes = 500
+    max_timesteps = 5000 #500
     max_steps = 500
-    buffer = ReplayBuffer(max_size=3000)
+    buffer = ReplayBuffer(max_size=20000) #max_size=3000)
+    lr = 1e-5 #3e-4 #0.001 #3e-4
     
     model = ActorCritic(env.action_space('archer_0').n)# , device)
-    optimizer = optim.Adam(model.parameters(), lr=3e-4)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
     
     episode_rewards = []
     metrics = MetricsTracker()
     
-    reward_scale = 10
-    penalty = 0.01
+    reward_scale = 100
+    penalty = 0
+    epochs = 12 # 8
+    minibatch_size = 1024
     
-    for episode in tqdm(range(max_episodes)):
+    # plot episode numbers will be much smaller as it takes multiple timesteps to complete an episode (max out the replay buffer and then do an update)
+
+    for timestep in tqdm(range(max_timesteps), desc='Training', unit=' step'):
         observations, _ = env.reset()
         episode_reward = 0
         
@@ -290,8 +302,8 @@ def main():
             observations = next_observations
         
         # PPO update
-        if len(buffer.buffer) >= buffer.max_size:
-            policy_loss, value_loss, entropy = ppo_update(model, optimizer, buffer, epochs=8)
+        if len(buffer.buffer) >= minibatch_size + 10: #buffer.max_size:
+            policy_loss, value_loss, entropy = ppo_update(model, optimizer, buffer, epochs=epochs, minibatch_size=minibatch_size)
             # Calculate mean values and advantages for the episode
             with torch.no_grad():
                 # Convert list of states to numpy array first
@@ -321,14 +333,42 @@ def main():
                 mean_advantages=mean_advantage
             )
             
-            buffer.clear()
+            # buffer.clear()
         
         episode_rewards.append(episode_reward)
     
         # Plotting
-        if episode % 10 == 0:
-            metrics.plot_metrics()
-            metrics.plot_metrics_with_confidence_intervals()
+        if timestep % 10 == 0 and timestep > 0:
+            metrics.plot_metrics(save_individual=False)
+            metrics.plot_metrics_smooth(save_individual=False)
+            
+        if timestep % 500 == 0 and timestep > 0:
+            if not os.path.exists('./models'):
+                os.makedirs('./models')
+            
+            torch.save(model.state_dict(), f'./models/mappo_model_episode_{timestep}_{time.time()}.pth')
+            metrics.save_metrics()
 
+    env.close()
+    if not os.path.exists('./models'):
+        os.makedirs('./models')
+        
+    torch.save(model.state_dict(), f'./models/mappo_model_episode_{timestep}_{time.time()}.pth')
+    metrics.save_metrics()
+    
 if __name__ == "__main__":
     main()
+    
+    
+# first run hyperparameters
+# max_timesteps = 500
+# max_steps = 500
+# buffer = ReplayBuffer(max_size=3000)
+# lr = 0.001 #3e-4
+# reward_scale = 10
+# penalty = 0.01
+# epochs = 8
+# model = ActorCritic(env.action_space('archer_0').n)# , device)
+# optimizer = optim.Adam(model.parameters(), lr=lr)
+# ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entropy_coef=0.01, epochs=4)
+# compute_gae(rewards, values, dones, gamma=0.99, gae_lambda=0.95)
