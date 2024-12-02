@@ -1,4 +1,5 @@
-#!/bin/bash
+module load anaconda3/2022.05 cuda/12.1
+
 module load anaconda3/2022.05
 
 # Create a Conda environment with Python 3.10
@@ -16,7 +17,4 @@ conda install -y conda-forge::tqdm
 
 pip3 install supersuit -y
 
-# Deactivate the environment
-conda deactivate
-
-echo "Environment mappo_env has been successfully created and configured."
+python3 mappo5.py

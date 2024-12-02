@@ -85,78 +85,6 @@ class ActorCritic(nn.Module):
         value = self.critic(x)
         return action_probs, value
 
-# class MetricsTracker:
-#     def __init__(self):
-#         self.metrics = {
-#             'episode_rewards': [],
-#             'episode_lengths': [],
-#             'policy_losses': [],
-#             'value_losses': [],
-#             'entropies': [],
-#             'mean_values': [],
-#             'mean_advantages': [],
-#             'buffer_capacity_used': []
-#         }
-    
-#     def add_metrics(self, **kwargs):
-#         for key, value in kwargs.items():
-#             if key in self.metrics:
-#                 self.metrics[key].append(value)
-    
-#     def plot_metrics(self, save_dir='./metrics', save_individual=False):
-#         import os
-#         if not os.path.exists(save_dir):
-#             os.makedirs(save_dir)
-        
-#         if save_individual:
-#             for metric_name, values in self.metrics.items():
-#                 if not values:
-#                     continue
-                    
-#                 plt.figure(figsize=(10, 5))
-#                 plt.plot(values)
-#                 plt.title(f'{metric_name.replace("_", " ").title()}')
-#                 plt.xlabel('Episode')
-#                 plt.ylabel('Value')
-#                 plt.savefig(f'{save_dir}/{metric_name}.png')
-#                 plt.close()
-            
-#         # Plot combined training metrics
-#         fig, axes = plt.subplots(3, 2, figsize=(15, 15))
-#         fig.suptitle('Training Metrics')
-        
-#         axes[0, 0].plot(self.metrics['episode_rewards'])
-#         axes[0, 0].set_title('Episode Rewards')
-#         axes[0, 0].set_xlabel('Episode')
-#         axes[0, 0].set_ylabel('Rewards')
-        
-#         axes[0, 1].plot(self.metrics['policy_losses'])
-#         axes[0, 1].set_title('Policy Loss')
-#         axes[0, 1].set_xlabel('Episode')
-#         axes[0, 1].set_ylabel('Loss')
-        
-#         axes[1, 0].plot(self.metrics['value_losses'])
-#         axes[1, 0].set_title('Value Loss')
-#         axes[1, 0].set_xlabel('Episode')
-#         axes[1, 0].set_ylabel('Loss')
-        
-#         axes[1, 1].plot(self.metrics['entropies'])
-#         axes[1, 1].set_title('Entropy')
-#         axes[1, 1].set_xlabel('Episode')
-#         axes[1, 1].set_ylabel('Entropy')
-        
-#         axes[2, 0].plot(self.metrics['buffer_capacity_used'])
-#         axes[2, 0].set_title('Buffer Capacity Used')
-#         axes[2, 0].set_xlabel('Episode')
-#         axes[2, 0].set_ylabel('Capacity')
-        
-#         # Hide the unused subplot
-#         fig.delaxes(axes[2, 1])
-        
-#         plt.tight_layout()
-#         plt.savefig(f'{save_dir}/combined_metrics.png')
-#         plt.close()
-
 def compute_gae(rewards, values, dones, gamma=0.99, gae_lambda=0.95):
     advantages = []
     gae = 0
@@ -175,7 +103,6 @@ def compute_gae(rewards, values, dones, gamma=0.99, gae_lambda=0.95):
     returns = advantages + torch.tensor(values, device=device)
     return advantages, returns
 
-# def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entropy_coef=0.01, epochs=4):
 def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entropy_coef=0.01, epochs=4, minibatch_size=32):
     batch = buffer.get_batch()
     
@@ -241,10 +168,10 @@ def main():
     env = ss.color_reduction_v0(env, mode='full')  # Grayscale
     
     # Training parameters
-    max_timesteps = 5000 #500
-    max_steps = 500
+    max_timesteps = 6000 #500
+    max_steps = 600
     buffer = ReplayBuffer(max_size=20000) #max_size=3000)
-    lr = 1e-5 #3e-4 #0.001 #3e-4
+    lr = 1e-6 #3e-4 #0.001 #3e-4
     
     model = ActorCritic(env.action_space('archer_0').n)# , device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -255,7 +182,7 @@ def main():
     reward_scale = 100
     penalty = 0
     epochs = 12 # 8
-    minibatch_size = 1024
+    minibatch_size = 2048
     
     # plot episode numbers will be much smaller as it takes multiple timesteps to complete an episode (max out the replay buffer and then do an update)
 
