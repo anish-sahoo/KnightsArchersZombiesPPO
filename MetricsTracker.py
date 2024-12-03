@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 class MetricsTracker:
-    def __init__(self):
+    def __init__(self, name=''):
         self.metrics = {
             'episode_rewards': [],
             'episode_lengths': [],
@@ -13,6 +13,7 @@ class MetricsTracker:
             'mean_values': [],
             'mean_advantages': [],
         }
+        self.dir = name
     
     def add_metrics(self, **kwargs):
         for key, value in kwargs.items():
@@ -20,6 +21,9 @@ class MetricsTracker:
                 self.metrics[key].append(value)
                 
     def plot_metrics(self, save_dir='./metrics', save_individual=False):
+        if self.dir != '':
+            save_dir = './metrics/' + self.dir
+        
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
         
@@ -62,6 +66,9 @@ class MetricsTracker:
         
         
     def plot_metrics_with_confidence_intervals(self, save_dir='./metrics', save_individual=False):
+        if self.dir != '':
+            save_dir = './metrics/' + self.dir
+        
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
         
@@ -122,7 +129,10 @@ class MetricsTracker:
         plt.savefig(f'{save_dir}/combined_metrics_conf.png')
         plt.close()
         
-    def save_metrics(self, save_dir='./metrics'):
+    def save_metrics(self, save_dir='./metrics', name=''):
+        if self.dir != '':
+            save_dir = './metrics/' + self.dir
+        
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
         
@@ -130,6 +140,9 @@ class MetricsTracker:
             np.save(f'{save_dir}/{metric_name}.npy', values)
             
     def plot_metrics_smooth(self, save_dir='./metrics', save_individual=False, smoothing_window=10):
+        if self.dir != '':
+            save_dir = './metrics/' + self.dir
+
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 

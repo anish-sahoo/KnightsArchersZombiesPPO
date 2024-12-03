@@ -157,7 +157,7 @@ def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entro
     
     return policy_loss.item(), value_loss.item(), entropy.item()
 
-def main(hyperparameters):
+def main(hyperparameters, name=''):
     # Environment setup
     env = knights_archers_zombies_v10.parallel_env(
         render_mode=None,
@@ -199,13 +199,13 @@ def main(hyperparameters):
     gamma = hyperparameters['gamma']
     gae_lambda = hyperparameters['gae_lambda']
     
-    writer = SummaryWriter(log_dir="./runs/mappo")
+    writer = SummaryWriter(log_dir=f'./runs/mappo_{name}')
     
     model = ActorCritic(env.action_space('archer_0').n)# , device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     
     episode_rewards = []
-    metrics = MetricsTracker()
+    metrics = MetricsTracker(name)
     
     # plot episode numbers will be much smaller as it takes multiple timesteps to complete an episode (max out the replay buffer and then do an update)
 
@@ -314,17 +314,21 @@ def main(hyperparameters):
             metrics.save_metrics()
             
         if timestep % 1000 == 0 and timestep > 0:
-            if not os.path.exists('./models'):
-                os.makedirs('./models')
+            savedir = f'./models/{name}' if name != '' else './models'
+            if not os.path.exists(savedir):
+                os.makedirs(savedir)
             
-            torch.save(model.state_dict(), f'./models/mappo_model_episode_{timestep}_{time.time()}.pth')
+            filename = f'{savedir}/mappo_model_episode_{timestep}_{time.time()}.pth'
+            if name != '':
+                filename = f'{savedir}/mappo_model_episode_{timestep}_{time.time()}.pth'
+            torch.save(model.state_dict(), filename)
             metrics.save_metrics()
             
-        if timestep % 200 == 0 and timestep > 0:
+        if timestep % 100 == 0:
             # Evaluate policy performance
             eval_rewards = []
             eval_steps = []
-            eval_episodes = 10
+            eval_episodes = 5
 
             for _ in range(eval_episodes):
                 eval_observations, _ = env.reset()
@@ -360,30 +364,35 @@ def main(hyperparameters):
             writer.add_scalar('Evaluation/AverageSteps', avg_eval_steps, timestep)
 
     env.close()
-    if not os.path.exists('./models'):
-        os.makedirs('./models')
-        
-    torch.save(model.state_dict(), f'./models/mappo_model_episode_{timestep}_{time.time()}.pth')
+    writer.close()
+    
+    savedir = f'./models/{name}' if name != '' else './models'
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+    
+    filename = f'{savedir}/mappo_model_episode_{timestep}_{time.time()}.pth'
+    if name != '':
+        filename = f'{savedir}/mappo_model_episode_{timestep}_{time.time()}.pth'
+    torch.save(model.state_dict(), filename)
     metrics.save_metrics()
     
 if __name__ == "__main__":
     hyperparameters = {
         'max_timesteps': 10000,
-        'max_steps': 500,
+        'max_steps': 5000,
         'buffer_size': 8000,
         'lr': 1e-4,
-        'reward_scale': 10,
+        'reward_scale': 1,
         'penalty': 0,
         'epochs': 6,
         'minibatch_size': 256,
         'clip_epsilon': 0.2,
         'value_coef': 0.5,
-        'entropy_coef': 0.02,
+        'entropy_coef': 0.03, #0.02,
         'gamma': 0.99,
         'gae_lambda': 0.95
     }
-    main(hyperparameters=hyperparameters)
-    
+    main(hyperparameters=hyperparameters, name='run7')
     
 # first run hyperparameters
 # max_timesteps = 500

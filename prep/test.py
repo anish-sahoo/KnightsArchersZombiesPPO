@@ -36,7 +36,14 @@ observations, infos = env.reset()
 while env.agents:
     actions = {agent: env.action_space(agent).sample() for agent in env.agents}
     observations, rewards, terminations, truncations, infos = env.step(actions)
-    for agent in env.agents:
-        print(agent, observations[agent].shape)
+    import matplotlib.pyplot as plt
+    i=0
+    for agent, obs in observations.items():
+        plt.imshow(obs)
+        plt.title(f"Observation for {agent}")
+        plt.savefig(f'observation{i}.png')
+        plt.axis('off')
+        i+=1
+    break
 
 env.close()
