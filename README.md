@@ -5,12 +5,13 @@ Knights Archers Zombies + Multi Agent PPO
 - implement the mappo algorithm with recurrent neural networks
 - train it for this specific configuration for standardization:
 ```python
-env = knights_archers_zombies_v10.parallel_env(
-    render_mode=None,
+knights_archers_zombies_v10.parallel_env(
+    render_mode="human",
+    spawn_rate=15,
     vector_state=False,
-    num_archers=4,
-    num_knights=4,
-    max_zombies=50,
+    num_archers=2,
+    num_knights=2,
+    max_zombies=30,
 )
 ```
 - train and visualize with matplotlib and tensorboard
