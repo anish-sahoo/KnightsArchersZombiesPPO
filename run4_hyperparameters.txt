@@ -1,0 +1,20 @@
+def list_hyperparameters():
+    hyperparameters = {
+        'max_timesteps': 10000,
+        'max_steps': 500,
+        'buffer_size': 8000,
+        'lr': 1e-4,
+        'reward_scale': 10,
+        'penalty': 0,
+        'epochs': 6,
+        'minibatch_size': 256,
+        'clip_epsilon': 0.2,
+        'value_coef': 0.5,
+        'entropy_coef': 0.02,
+        'gamma': 0.99,
+        'gae_lambda': 0.95
+    }
+    for key, value in hyperparameters.items():
+        print(f"{key}: {value}")
+
+list_hyperparameters()

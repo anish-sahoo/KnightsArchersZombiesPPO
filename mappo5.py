@@ -381,18 +381,18 @@ if __name__ == "__main__":
         'max_timesteps': 10000,
         'max_steps': 5000,
         'buffer_size': 8000,
-        'lr': 1e-4,
+        'lr': 1e-6,
         'reward_scale': 1,
         'penalty': 0,
         'epochs': 6,
         'minibatch_size': 256,
         'clip_epsilon': 0.2,
-        'value_coef': 0.5,
+        'value_coef': 0.6,
         'entropy_coef': 0.03, #0.02,
         'gamma': 0.99,
         'gae_lambda': 0.95
     }
-    main(hyperparameters=hyperparameters, name='run7')
+    main(hyperparameters=hyperparameters, name='run8')
     
 # first run hyperparameters
 # max_timesteps = 500
