@@ -157,7 +157,7 @@ We implement a 'centralized' version which has the following key differences:
   \item Centralized data collection - All agents share the same data buffer
 \end{enumerate}
 
-We have also incorporated some features from the MAPPO paper \cite{DBLP:journals/corr/abs-2103-01955}:
+As this is a multi-agent problem, we also incorporate some features from the MAPPO\cite{DBLP:journals/corr/abs-2103-01955} paper to improve the performance of the model:
 \begin{enumerate}
   \item GAE - We use the Generalized Advantage Estimation (GAE) to compute the advantage function
   \item Entropy regularization - We use entropy regularization to encourage exploration
@@ -193,6 +193,36 @@ the following configuration:
 Before passing the state to the network, we preprocess the state using SuperSuit \cite{SuperSuit} wrappers by resizing it to 84 by 84 pixels and
 converting it to grayscale.
 
+
+\begin{table}[h]
+  \caption{Hyperparameters}
+   \centering
+   \begin{tabular}{ll}
+     \toprule
+     hyperparameter     & value     \\
+     \midrule
+     total timesteps & $10000$ \\
+     rollout size & $5000$ \\
+     data buffer capacity & $8000$ \\
+     reward scale & $1$ \\
+     epochs & $6$ \\
+     minibatch size & $256$ \\
+     clip epsilon & $0.2$ \\
+     value coefficient & $0.5$ \\
+     entropy coefficient & $0.03$ \\
+     discount factor & $0.99$ \\
+     GAE lambda & $0.95$ \\
+     value loss & $0.5$ \\
+     huber delta & $10$ \\
+     optimizer & Adam \\
+     optimizer learning rate & $0.00005$ \\
+     network initialization & Orthogonal \\
+     \bottomrule
+   \end{tabular}
+   \label{tab:table}
+ \end{table}
+
+
 We train the model for 10,000 timesteps with a rollout size of 5000 and a data buffer capacity of 8000.
 
 
@@ -200,14 +230,15 @@ We train the model for 10,000 timesteps with a rollout size of 5000 and a data b
 
 \begin{figure}[h]
   \centering
-  \includegraphics[scale=0.4]{rewards2.png}
+  \includegraphics[scale=0.6]{rewards2.png}
   \caption{Training results}
   \label{fig:training_results_no_temporal}
 \end{figure}
 
 The training results show that the model converges to a suboptimal policy with a total reward of around 6 per episode. As the entropy 
-of the policy decreases, it shows that exploration is decreasing and the policy is converging to a suboptimal policy. This suggests that the model is not learning
-an effective strategy to kill the zombies.
+of the policy decreases, it shows that exploration is decreasing and the policy is converging suboptimally. This suggests that the model is not learning
+an effective strategy to kill the zombies. This could be due to the fact that the model is not able to capture zombie movement patterns properly. This makes it 
+harder for the agent to predict zombies and targeting them effectively.
 
 \section{Improved Implementation: Incorporating Temporal Data}
 \subsection{Motivation for change}
@@ -222,7 +253,8 @@ and learn patterns of movement. The network architecture now consists of three c
 of size 84 by 84 pixels.
 
 \subsection{Updates to environment setup}
-We updated the environment setup to include a stack of 4 frames as input to the network. We used the SuperSuit wrappers to stack the frames before passing them to the network.
+We updated the environment setup to include a stack of 4 frames as input to the network. We used the SuperSuit wrappers to stack the frames before passing them to the network. We also modify
+the entropy coefficient to a nonstandard value $0.04$ to encourage exploration and learning of a better policy.
 
 \subsection{Results}
 We see a drastic improvement in the performance of the model after incorporating temporal data. 
@@ -230,7 +262,7 @@ While not a lot, the total reward per episode has increased to around 10. The en
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.8\textwidth]{rewards2.png}
+  \includegraphics[scale=0.6]{rewards2.png}
   \caption{Training results with temporal data}
   \label{fig:training_results_with_temporal}
 \end{figure}
@@ -248,17 +280,38 @@ The agents have also learned to avoid the zombies and not collide with them, whi
 Surprisingly, the agents have learned to predict zombies outside their observation limits (512 by 512 pixels) and move towards them, suggesting that the agents are learning to plan ahead and anticipate the movement of the zombies.
 
 
-- Interesting observations
-- Qualitative analysis of agent behavior
+- Interesting observations\\
+- Qualitative analysis of agent behavior\\
 - Insights gained from the temporal data approach
 
 \section{Discussion}
-- Theoretical implications of the findings
-- Why temporal data made a significant difference
+
+\subsection{Implications}
+- Theoretical implications of the findings\\
+  - hybrid centralized policy for all agents\\
+- Why temporal data made a significant difference\\
 - Broader insights into multi-agent reinforcement learning
+
+\subsection{Limitations}
 - Limitations of the current approach
+
+\subsection{Future Work}
 - Potential future work
 
+
+
+\section{Conclusion}
+Your conclusion here
+
+\section*{Acknowledgments}
+This was was supported in part by Professor Chris Amato and the CS 4180 course staff at Northeastern University.
+
+
+%Bibliography
+\bibliographystyle{unsrt}  
+\bibliography{references}  
+
+\end{document}
 
 % \paragraph{Paragraph}
 % \lipsum[7]
@@ -307,45 +360,3 @@ Surprisingly, the agents have learned to predict zombies outside their observati
 % \item consectetur adipiscing elit. 
 % \item Aliquam dignissim blandit est, in dictum tortor gravida eget. In ac rutrum magna.
 % \end{itemize}
-
-
-\section{Conclusion}
-Your conclusion here
-
-\section*{Acknowledgments}
-This was was supported in part by Professor Chris Amato and the CS 4180 course staff at Northeastern University.
-
-
-\begin{table}[h]
-  \caption{Hyperparameters}
-   \centering
-   \begin{tabular}{ll}
-     \toprule
-     hyperparameter     & value     \\
-     \midrule
-     total timesteps & $10000$ \\
-     rollout size & $5000$ \\
-     data buffer capacity & $8000$ \\
-     reward scale & $1$ \\
-     epochs & $6$ \\
-     minibatch size & $256$ \\
-     clip epsilon & $0.2$ \\
-     value coefficient & $0.5$ \\
-     entropy coefficient & $0.03$ \\
-     discount factor & $0.99$ \\
-     GAE lambda & $0.95$ \\
-     value loss & $0.5$ \\
-     huber delta & $10$ \\
-     optimizer & Adam \\
-     optimizer learning rate & $0.00005$ \\
-     network initialization & Orthogonal \\
-     \bottomrule
-   \end{tabular}
-   \label{tab:table}
- \end{table}
-
-%Bibliography
-\bibliographystyle{unsrt}  
-\bibliography{references}  
-
-\end{document}
