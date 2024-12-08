@@ -31,6 +31,7 @@ import supersuit as ss
 # Apply SuperSuit wrappers to make observations smaller and greyscale
 env = ss.resize_v1(env, x_size=84, y_size=84)
 env = ss.color_reduction_v0(env, mode='full')
+env = ss.frame_stack_v2(env, stack_size=4)
 
 observations, infos = env.reset()
 while env.agents:
@@ -39,6 +40,7 @@ while env.agents:
     import matplotlib.pyplot as plt
     i=0
     for agent, obs in observations.items():
+        print(agent, obs.shape)
         plt.imshow(obs)
         plt.title(f"Observation for {agent}")
         plt.savefig(f'observation{i}.png')

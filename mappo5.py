@@ -37,15 +37,24 @@ class ActorCritic(nn.Module):
     
     def __init__(self, action_dim):
         super().__init__()
-        # Input: 84x84 grayscale
-        self.conv1 = nn.Conv2d(1, 32, 8, stride=4)  # Output: 20x20x32
-        self.conv2 = nn.Conv2d(32, 64, 4, stride=2)  # Output: 9x9x64
-        self.conv3 = nn.Conv2d(64, 64, 3, stride=1)  # Output: 7x7x64
+        self.conv1 = nn.Conv2d(4, 16, 3, stride=2)  # Output: 41x41x16
+        self.conv2 = nn.Conv2d(16, 32, 3, stride=2)  # Output: 20x20x32
+        self.conv3 = nn.Conv2d(32, 32, 3, stride=2)  # Output: 9x9x32
+
+        # Flattened size: 32 * 9 * 9 = 2592
+        self.fc = nn.Linear(2592, 64)
+        self.actor = nn.Linear(64, action_dim)
+        self.critic = nn.Linear(64, 1)
         
-        # Calculate flattened size: 7 * 7 * 64 = 3136
-        self.fc = nn.Linear(3136, 256)
-        self.actor = nn.Linear(256, action_dim)
-        self.critic = nn.Linear(256, 1)
+        # # Input: 84x84 grayscale
+        # self.conv1 = nn.Conv2d(1, 32, 8, stride=4)  # Output: 20x20x32
+        # self.conv2 = nn.Conv2d(32, 64, 4, stride=2)  # Output: 9x9x64
+        # self.conv3 = nn.Conv2d(64, 64, 3, stride=1)  # Output: 7x7x64
+        
+        # # Calculate flattened size: 7 * 7 * 64 = 3136
+        # self.fc = nn.Linear(3136, 256)
+        # self.actor = nn.Linear(256, action_dim)
+        # self.critic = nn.Linear(256, 1)
         
         self.to(device)
         
@@ -58,33 +67,63 @@ class ActorCritic(nn.Module):
         # Add to ActorCritic __init__ after self.to(device):
         self.apply(init_weights)
 
+    # def forward(self, x):
+    #     # Handle observation preprocessing
+    #     if not isinstance(x, torch.Tensor):
+    #         x = torch.FloatTensor(x)
+        
+    #     # Move to device if not already there
+    #     if x.device != device:
+    #         x = x.to(device)
+        
+    #     # Ensure proper dimensions
+    #     if len(x.shape) == 2:  # If input is (84, 84)
+    #         x = x.unsqueeze(0).unsqueeze(0)  # Add batch and channel dims -> (1, 1, 84, 84)
+    #     elif len(x.shape) == 3:  # If input is (1, 84, 84) or (3, 84, 84)
+    #         if x.shape[0] == 3:  # If RGB
+    #             x = x.mean(dim=0, keepdim=True).unsqueeze(0)  # Convert to grayscale and add batch
+    #         else:
+    #             x = x.unsqueeze(0)  # Just add batch dimension
+        
+    #     x = F.relu(self.conv1(x))
+    #     x = F.relu(self.conv2(x))
+    #     x = F.relu(self.conv3(x))
+    #     x = x.reshape(x.size(0), -1)  # Flatten to (batch_size, 3136)
+    #     x = F.relu(self.fc(x))
+        
+    #     action_probs = F.softmax(self.actor(x), dim=-1)
+    #     value = self.critic(x)
+    #     return action_probs, value
+    
     def forward(self, x):
-        # Handle observation preprocessing
+        # Convert to tensor if not already one
         if not isinstance(x, torch.Tensor):
             x = torch.FloatTensor(x)
         
-        # Move to device if not already there
+        # Move to device if needed
         if x.device != device:
             x = x.to(device)
         
-        # Ensure proper dimensions
-        if len(x.shape) == 2:  # If input is (84, 84)
-            x = x.unsqueeze(0).unsqueeze(0)  # Add batch and channel dims -> (1, 1, 84, 84)
-        elif len(x.shape) == 3:  # If input is (1, 84, 84) or (3, 84, 84)
-            if x.shape[0] == 3:  # If RGB
-                x = x.mean(dim=0, keepdim=True).unsqueeze(0)  # Convert to grayscale and add batch
-            else:
-                x = x.unsqueeze(0)  # Just add batch dimension
+        # Handle observation shape normalization
+        if len(x.shape) == 3:  # Single observation (height, width, channels)
+            x = x.unsqueeze(0)  # Add batch dimension -> (1, height, width, channels)
         
+        # Ensure channel-first format (batch_size, channels, height, width)
+        if x.shape[-1] == 4:  # If channels are last (e.g., NHWC format)
+            x = x.permute(0, 3, 1, 2)  # Reorder to (batch_size, channels, height, width)
+        
+        # Pass through the network
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-        x = x.reshape(x.size(0), -1)  # Flatten to (batch_size, 3136)
+        x = x.reshape(x.size(0), -1)  # Flatten
         x = F.relu(self.fc(x))
         
+        # Compute outputs
         action_probs = F.softmax(self.actor(x), dim=-1)
         value = self.critic(x)
         return action_probs, value
+
 
 def compute_gae(rewards, values, dones, gamma=0.99, gae_lambda=0.95):
     advantages = []
@@ -163,23 +202,14 @@ def main(hyperparameters, name=''):
         render_mode=None,
         spawn_rate=15,
         vector_state=False,
-        num_archers=2,
-        num_knights=2,
+        num_archers=2, #2
+        num_knights=2, #2
         max_zombies=30,
     )
     
     env = ss.resize_v1(env, x_size=84, y_size=84)  # Resize to 84x84
     env = ss.color_reduction_v0(env, mode='full')  # Grayscale
-    
-    # # Training parameters
-    # max_timesteps = 10000 #500
-    # max_steps = 500
-    # buffer = ReplayBuffer(max_size=8000) #max_size=3000)
-    # lr = 1e-4 #3e-4 #0.001 #3e-4
-    # reward_scale = 10
-    # penalty = 0
-    # epochs = 6 # 8
-    # minibatch_size = 256
+    env = ss.frame_stack_v2(env, stack_size=4) # Stack 4 frames
     
     max_timesteps = hyperparameters['max_timesteps']
     max_steps = hyperparameters['max_steps']
@@ -252,7 +282,7 @@ def main(hyperparameters, name=''):
             observations = next_observations
         
         # PPO update
-        if len(buffer.buffer) > minibatch_size: #buffer.max_size: 
+        if len(buffer.buffer) > minibatch_size: # buffer.max_size:
             policy_loss, value_loss, entropy = ppo_update(
                 model, 
                 optimizer, 
@@ -313,7 +343,7 @@ def main(hyperparameters, name=''):
             metrics.plot_metrics_smooth(save_individual=True)
             metrics.save_metrics()
             
-        if timestep % 1000 == 0 and timestep > 0:
+        if timestep % 500 == 0 and timestep > 0:
             savedir = f'./models/{name}' if name != '' else './models'
             if not os.path.exists(savedir):
                 os.makedirs(savedir)
@@ -324,44 +354,44 @@ def main(hyperparameters, name=''):
             torch.save(model.state_dict(), filename)
             metrics.save_metrics()
             
-        if timestep % 100 == 0:
-            # Evaluate policy performance
-            eval_rewards = []
-            eval_steps = []
-            eval_episodes = 5
+        # if timestep % 50 == 0:
+        #     # Evaluate policy performance
+        #     eval_rewards = []
+        #     eval_steps = []
+        #     eval_episodes = 5
 
-            for _ in range(eval_episodes):
-                eval_observations, _ = env.reset()
-                eval_episode_reward = 0
-                eval_episode_steps = 0
+        #     for _ in range(eval_episodes):
+        #         eval_observations, _ = env.reset()
+        #         eval_episode_reward = 0
+        #         eval_episode_steps = 0
 
-                while True:
-                    eval_actions = {}
-                    for agent in env.agents:
-                        eval_obs = torch.FloatTensor(eval_observations[agent]).to(device)
-                        with torch.no_grad():
-                            eval_action_probs, _ = model(eval_obs)
-                            eval_dist = Categorical(eval_action_probs)
-                            eval_action = eval_dist.sample()
-                        eval_actions[agent] = eval_action.item()
+        #         while True:
+        #             eval_actions = {}
+        #             for agent in env.agents:
+        #                 eval_obs = torch.FloatTensor(eval_observations[agent]).to(device)
+        #                 with torch.no_grad():
+        #                     eval_action_probs, _ = model(eval_obs)
+        #                     eval_dist = Categorical(eval_action_probs)
+        #                     eval_action = eval_dist.sample()
+        #                 eval_actions[agent] = eval_action.item()
 
-                    eval_next_observations, eval_rewards_dict, eval_terminations, eval_truncations, _ = env.step(eval_actions)
-                    eval_episode_reward += sum(eval_rewards_dict.values())
-                    eval_episode_steps += 1
+        #             eval_next_observations, eval_rewards_dict, eval_terminations, eval_truncations, _ = env.step(eval_actions)
+        #             eval_episode_reward += sum(eval_rewards_dict.values())
+        #             eval_episode_steps += 1
 
-                    if all(eval_terminations.values()) or all(eval_truncations.values()):
-                        break
+        #             if all(eval_terminations.values()) or all(eval_truncations.values()):
+        #                 break
 
-                    eval_observations = eval_next_observations
+        #             eval_observations = eval_next_observations
 
-                eval_rewards.append(eval_episode_reward)
-                eval_steps.append(eval_episode_steps)
+        #         eval_rewards.append(eval_episode_reward)
+        #         eval_steps.append(eval_episode_steps)
 
-            avg_eval_reward = np.mean(eval_rewards)
-            avg_eval_steps = np.mean(eval_steps)
+        #     avg_eval_reward = np.mean(eval_rewards)
+        #     avg_eval_steps = np.mean(eval_steps)
 
-            writer.add_scalar('Evaluation/AverageReward', avg_eval_reward, timestep)
-            writer.add_scalar('Evaluation/AverageSteps', avg_eval_steps, timestep)
+        #     writer.add_scalar('Evaluation/AverageReward', avg_eval_reward, timestep)
+        #     writer.add_scalar('Evaluation/AverageSteps', avg_eval_steps, timestep)
 
     env.close()
     writer.close()
@@ -381,18 +411,18 @@ if __name__ == "__main__":
         'max_timesteps': 10000,
         'max_steps': 5000,
         'buffer_size': 8000,
-        'lr': 1e-6,
+        'lr': 5e-5,
         'reward_scale': 1,
         'penalty': 0,
-        'epochs': 6,
+        'epochs': 10,
         'minibatch_size': 256,
         'clip_epsilon': 0.2,
-        'value_coef': 0.6,
+        'value_coef': 0.5,
         'entropy_coef': 0.03, #0.02,
         'gamma': 0.99,
         'gae_lambda': 0.95
     }
-    main(hyperparameters=hyperparameters, name='run8')
+    main(hyperparameters=hyperparameters, name='run12_only_archers')
     
 # first run hyperparameters
 # max_timesteps = 500
