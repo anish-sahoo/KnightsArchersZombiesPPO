@@ -230,7 +230,7 @@ We train the model for 10,000 timesteps with a rollout size of 5000 and a data b
 
 \begin{figure}[h]
   \centering
-  \includegraphics[scale=0.3]{run6.png}
+  \includegraphics[scale=0.7]{metrics_initial.png}
   \caption{Training results}
   \label{fig:training_results_no_temporal}
 \end{figure}
@@ -262,14 +262,26 @@ While not a lot, the total reward per episode has increased to around 10. The en
 
 \begin{figure}[h]
   \centering
-  \includegraphics[scale=0.3]{run12.png}
+  \includegraphics[scale=0.7]{metrics_framestack.png}
   \caption{Training results with temporal data}
   \label{fig:training_results_with_temporal}
 \end{figure}
 
-The entropy of the policy is high till the very end, which means that it has kept exploring and learning throughout the training process. 
-However, this also indicates that the model has not yet converged to an optimal policy and there is still room for improvement. We estimate that 
-training for at least 50,000 timesteps would be required to reach a good policy. 
+\begin{figure}[h]
+  \begin{minipage}[h]{0.5\linewidth}
+    The entropy of the policy is high till the very end, which means that it has kept exploring and learning throughout the training process. 
+    The average episodic reward during training has increased to around 8, which is a significant improvement over the initial implementation.
+    However, this also indicates that the model has not yet converged to an optimal policy and there is still room for improvement. We estimate that 
+    training for at least 50,000 timesteps would be required to reach a good policy.
+  \end{minipage}
+  \hspace{0.5cm}
+  \begin{minipage}[h]{0.4\linewidth}
+    \centering
+    \includegraphics[scale=0.6]{combined_rewards.png}
+    \caption{Difference in average episodic rewards between the two implementations}
+    \label{fig:network_architecture}
+  \end{minipage}
+\end{figure}
 
 
 % \section{Observations}
