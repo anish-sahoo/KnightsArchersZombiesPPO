@@ -21,8 +21,8 @@
 \title{Centralized PPO in Multi-Agent Reinforcement Learning
 %%%% Cite as
 %%%% Update your official citation here when published 
-\thanks{\textit{\underline{Citation}}: 
-\textbf{Authors. Title. Pages.... DOI:000000/11111.}} 
+% \thanks{\textit{\underline{Citation}}: 
+% \textbf{Authors. Title. Pages.... DOI:000000/11111.}} 
 }
 
 \author{
@@ -31,6 +31,7 @@
   Northeastern University \\
   Boston, MA\\
   \texttt{sahoo.an@northeastern.edu} \\
+  \href{https://github.com/anish-sahoo/KnightsArchersZombiesPPO}{\underline{GitHub}} \\
 }
 
 
@@ -40,7 +41,7 @@
 
 \begin{abstract}
 This paper explores the use of centralized Proximal Policy Optimization (PPO) in multi-agent 
-reinforcement learning. We use the KnightsArchersZombies environment from PettingZoo to train 
+reinforcement learning. We use the Knights Archers Zombies environment from PettingZoo to train 
 a model for multiple agents with a centralized, shared actor-critic model. We implement a version of PPO inspired
 by the original PPO paper and the MAPPO paper. We observe that the centralized PPO model without
 any temporal data converges to a suboptimal policy. We then update our model to include temporal data
@@ -60,7 +61,7 @@ and generalization.
 Multi-agent reinforcement learning (MARL) is a branch of reinforcement learning that focuses on
 training multiple agents to interact with each other and their environment. MARL is a challenging
 problem because the agents must learn to cooperate and compete with each other in a complex,
-dynamic environment. The KnightsArchersZombies environment presents a unique challenge, simulating 
+dynamic environment. The Knights Archers Zombies environment presents a unique challenge, simulating 
 a scenario where different agent types (knights, archers, and zombies) interact 
 within a 720 by 1280 pixel map. Each agent type possesses unique characteristics 
 and capabilities, creating complex interaction dynamics that make it hard to learn optimal policies.
@@ -181,7 +182,7 @@ The network consists of three convolutional layers followed by a fully connected
 % \end{figure}
 
 \subsection{Environment setup}
-We use the KnightsArchersZombies environment from PettingZoo to train our model. The environment is initialized with
+We use the Knights Archers Zombies environment from PettingZoo to train our model. The environment is initialized with
 the following configuration:
 \begin{itemize}
   \item Spawn Rate:15
@@ -292,31 +293,84 @@ The agents have also learned to avoid the zombies and not collide with them, whi
 Surprisingly, the agents have learned to predict zombies outside their observation limits (512 by 512 pixels) and move towards them, suggesting that the agents are learning to plan ahead and anticipate the movement of the zombies.
 
 
-- Interesting observations\\
-- Qualitative analysis of agent behavior\\
-- Insights gained from the temporal data approach
+% - Interesting observations\\
+% - Qualitative analysis of agent behavior\\
+% - Insights gained from the temporal data approach
 
 \section{Discussion}
 
 \subsection{Implications}
-- Theoretical implications of the findings\\
-  - hybrid centralized policy for all agents\\
-- Why temporal data made a significant difference\\
-- Broader insights into multi-agent reinforcement learning
+Our findings suggest that a hybrid centralized policy for all agents can be 
+effective in MARL scenarios, while lowering the 
+complexity of the model and speeding up training. This approach allows for shared learning and decision-making, which can lead to 
+more efficient and cooperative strategies among agents. However, further research
+is required to explore the scalability and generalization of this approach to
+more complex environments and scenarios.
+
+Incorporating temporal data significantly improved the model's performance 
+because it allowed the agents to capture and learn from the dynamics of the 
+environment. By stacking frames, the model could better understand movement 
+patterns and predict future states, leading to more informed and effective actions. 
+This could be improved further by using Recurrent Neural Networks (RNNs) or
+Long Short-Term Memory (LSTM) networks to capture long-term dependencies and
+temporal dynamics in the environment.
+
+This study provides broader insights into the importance of shared learning 
+and temporal data in MARL. It highlights the 
+potential of centralized models to foster cooperation and improve overall 
+performance in complex environments.
 
 \subsection{Limitations}
-- Limitations of the current approach
+Our study has several limitations that should be considered. The Knights Archers Zombies environment is relatively simple,
+and the agents have limited actions and observations. This makes it easier for the agents to learn effective strategies
+and limits the generalization of the model to more complex environments. Future research should explore more complex
+environments with larger state and action spaces to evaluate the scalability and generalization of the model.
+
+The training process for this environment is bottlenecked by the speed at which the environment can generate data.
+We were only able to train for 10,000 timesteps due to the slow generation of data. This limited the performance of the model
+and prevented it from converging to an optimal policy. Future research should explore more efficient data generation techniques
+to speed up the training process and allow the model to converge to an optimal policy.
+
+Currently, the agent can only see 84 by 84 pixels of the environment, which limits 
+its ability to capture details far away from the agent. PettingZoo provides another 
+state representation
+in the form of a vector of the positions of all agents and objects in the environment. 
+Future research should explore the use of this state representation to improve 
+the performance of the model and 
+allow it to capture more details of the environment.
 
 \subsection{Future Work}
-- Potential future work
+Future work could explore several avenues to further improve the performance and generalization of the centralized PPO model in MARL:
 
-
+\begin{itemize}
+  \item \textbf{Longer Training Duration}: Extending the training duration to more than 50,000 timesteps could help the model converge to a more optimal policy.
+  \item \textbf{Complex Environments}: Testing the model in more complex environments with larger state and action spaces to evaluate its scalability and generalization.
+  \item \textbf{Advanced State Representations}: Utilizing more detailed state representations, such as the vector of positions of all agents and objects, to capture more information about the environment.
+  \item \textbf{Separate actor-critic models}: Comparing the performance of the centralized shared model with separate actor-critic models for each agent to evaluate the impact of shared learning.
+  \item \textbf{Recurrent Neural Networks}: Incorporating RNNs or LSTM networks to better capture long-term dependencies and temporal dynamics in the environment.
+  \item \textbf{Efficient Data Generation}: Developing more efficient data generation techniques to speed up the training process and allow the model to converge faster.
+  \item \textbf{Multi-Agent Communication}: Exploring the impact of explicit communication between agents to enhance cooperation and coordination.
+  \item \textbf{Transfer Learning}: Investigating the use of transfer learning to apply the knowledge gained from one environment to another, potentially reducing training time and improving performance.
+\end{itemize}
 
 \section{Conclusion}
-Your conclusion here
+In this study, we explored the use of centralized PPO in multi-agent 
+reinforcement learning using the Knights Archers Zombies environment 
+from PettingZoo. We implemented a centralized shared actor-critic model 
+and trained the agents using PPO. We observed that the model converged 
+to a suboptimal policy without temporal data but significantly improved 
+with the incorporation of temporal data. The agents learned to cooperate, 
+target different directions, and avoid zombies, suggesting that the model 
+is learning an effective policy. Our findings highlight the importance of 
+shared learning and temporal data in MARL 
+and provide insights into the potential of centralized models to foster 
+cooperation and improve performance in complex environments. Future 
+research should explore more complex environments, longer training 
+durations, and advanced state representations to further improve 
+the performance and generalization of the model.
 
 \section*{Acknowledgments}
-This was was supported in part by Professor Chris Amato and the CS 4180 course staff at Northeastern University.
+This was was supported by Professor Chris Amato and the CS 4180 course staff at Northeastern University.
 
 
 %Bibliography
