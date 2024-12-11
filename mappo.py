@@ -6,13 +6,10 @@ from torch.distributions import Categorical
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from pettingzoo.butterfly import knights_archers_zombies_v10
-from tqdm import tqdm
 import supersuit as ss
+from tqdm import tqdm
 import os
 import time
-
-# from ReplayBuffer import ReplayBuffer 
-# from ActorCritic import ActorCritic
 from MetricsTracker import MetricsTracker
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -33,8 +30,56 @@ class ReplayBuffer:
     def clear(self):
         self.buffer = []
 
+class ActorCriticOriginal(nn.Module):
+    def __init__(self, action_dim):
+        super().__init__()
+        # Input: 84x84 grayscale 1 channel
+        self.conv1 = nn.Conv2d(1, 32, 8, stride=4)  # Output: 20x20x32
+        self.conv2 = nn.Conv2d(32, 64, 4, stride=2)  # Output: 9x9x64
+        self.conv3 = nn.Conv2d(64, 64, 3, stride=1)  # Output: 7x7x64
+        
+        # Calculate flattened size: 7 * 7 * 64 = 3136
+        self.fc = nn.Linear(3136, 256)
+        self.actor = nn.Linear(256, action_dim)
+        self.critic = nn.Linear(256, 1)
+        
+        self.to(device)
+        
+        def init_weights(m):
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+                nn.init.orthogonal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias.data)
+
+        self.apply(init_weights)
+
+    def forward(self, x):
+        if not isinstance(x, torch.Tensor):
+            x = torch.FloatTensor(x)
+        if x.device != device:
+            x = x.to(device)
+        
+        # Ensure proper dimensions
+        if len(x.shape) == 2:  # If input is (84, 84)
+            x = x.unsqueeze(0).unsqueeze(0)  # Add batch and channel dims -> (1, 1, 84, 84)
+        elif len(x.shape) == 3:  # If input is (1, 84, 84) or (3, 84, 84)
+            if x.shape[0] == 3:  # If RGB
+                x = x.mean(dim=0, keepdim=True).unsqueeze(0)  # Convert to grayscale and add batch
+            else:
+                x = x.unsqueeze(0)  # Just add batch dimension
+        
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = x.reshape(x.size(0), -1)  # Flatten
+        x = F.relu(self.fc(x))
+        
+        action_probs = F.softmax(self.actor(x), dim=-1)
+        value = self.critic(x)
+        return action_probs, value
+
+
 class ActorCritic(nn.Module):
-    
     def __init__(self, action_dim):
         super().__init__()
         self.conv1 = nn.Conv2d(4, 16, 3, stride=2)  # Output: 41x41x16
@@ -46,16 +91,6 @@ class ActorCritic(nn.Module):
         self.actor = nn.Linear(64, action_dim)
         self.critic = nn.Linear(64, 1)
         
-        # # Input: 84x84 grayscale
-        # self.conv1 = nn.Conv2d(1, 32, 8, stride=4)  # Output: 20x20x32
-        # self.conv2 = nn.Conv2d(32, 64, 4, stride=2)  # Output: 9x9x64
-        # self.conv3 = nn.Conv2d(64, 64, 3, stride=1)  # Output: 7x7x64
-        
-        # # Calculate flattened size: 7 * 7 * 64 = 3136
-        # self.fc = nn.Linear(3136, 256)
-        # self.actor = nn.Linear(256, action_dim)
-        # self.critic = nn.Linear(256, 1)
-        
         self.to(device)
         
         def init_weights(m):
@@ -64,43 +99,11 @@ class ActorCritic(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias.data)
 
-        # Add to ActorCritic __init__ after self.to(device):
         self.apply(init_weights)
-
-    # def forward(self, x):
-    #     # Handle observation preprocessing
-    #     if not isinstance(x, torch.Tensor):
-    #         x = torch.FloatTensor(x)
-        
-    #     # Move to device if not already there
-    #     if x.device != device:
-    #         x = x.to(device)
-        
-    #     # Ensure proper dimensions
-    #     if len(x.shape) == 2:  # If input is (84, 84)
-    #         x = x.unsqueeze(0).unsqueeze(0)  # Add batch and channel dims -> (1, 1, 84, 84)
-    #     elif len(x.shape) == 3:  # If input is (1, 84, 84) or (3, 84, 84)
-    #         if x.shape[0] == 3:  # If RGB
-    #             x = x.mean(dim=0, keepdim=True).unsqueeze(0)  # Convert to grayscale and add batch
-    #         else:
-    #             x = x.unsqueeze(0)  # Just add batch dimension
-        
-    #     x = F.relu(self.conv1(x))
-    #     x = F.relu(self.conv2(x))
-    #     x = F.relu(self.conv3(x))
-    #     x = x.reshape(x.size(0), -1)  # Flatten to (batch_size, 3136)
-    #     x = F.relu(self.fc(x))
-        
-    #     action_probs = F.softmax(self.actor(x), dim=-1)
-    #     value = self.critic(x)
-    #     return action_probs, value
     
     def forward(self, x):
-        # Convert to tensor if not already one
         if not isinstance(x, torch.Tensor):
             x = torch.FloatTensor(x)
-        
-        # Move to device if needed
         if x.device != device:
             x = x.to(device)
         
@@ -147,8 +150,7 @@ def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entro
     batch = buffer.get_batch()
     
     # np.random.shuffle(batch)
-    
-    # batch = batch[:minibatch_size]  # Mini-batch instead of whole buffer ---------------------------this is new
+    # batch = batch[:minibatch_size]  # Mini-batch instead of whole buffer
     
     indices = np.random.choice(len(batch), minibatch_size, replace=False)
     batch = [batch[i] for i in indices]
@@ -169,7 +171,6 @@ def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entro
         _, values = model(states)
         values = values.squeeze()
     
-    # Rest of the function remains the same
     advantages, returns = compute_gae(rewards, values.cpu().numpy(), dones)
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
     
@@ -197,13 +198,12 @@ def ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entro
     return policy_loss.item(), value_loss.item(), entropy.item()
 
 def main(hyperparameters, name=''):
-    # Environment setup
     env = knights_archers_zombies_v10.parallel_env(
         render_mode=None,
         spawn_rate=15,
         vector_state=False,
-        num_archers=2, #2
-        num_knights=2, #2
+        num_archers=2,
+        num_knights=2,
         max_zombies=30,
     )
     
@@ -236,8 +236,6 @@ def main(hyperparameters, name=''):
     
     episode_rewards = []
     metrics = MetricsTracker(name)
-    
-    # plot episode numbers will be much smaller as it takes multiple timesteps to complete an episode (max out the replay buffer and then do an update)
 
     for timestep in tqdm(range(max_timesteps), desc='Training', unit=' step'):
         observations, _ = env.reset()
@@ -295,7 +293,6 @@ def main(hyperparameters, name=''):
             )
             # Calculate mean values and advantages for the episode
             with torch.no_grad():
-                # Convert list of states to numpy array first
                 states_np = np.array([t['state'] for t in buffer.buffer])
                 
                 # Reshape to (batch_size, channels, height, width)
@@ -353,45 +350,6 @@ def main(hyperparameters, name=''):
                 filename = f'{savedir}/mappo_model_episode_{timestep}_{time.time()}.pth'
             torch.save(model.state_dict(), filename)
             metrics.save_metrics()
-            
-        # if timestep % 50 == 0:
-        #     # Evaluate policy performance
-        #     eval_rewards = []
-        #     eval_steps = []
-        #     eval_episodes = 5
-
-        #     for _ in range(eval_episodes):
-        #         eval_observations, _ = env.reset()
-        #         eval_episode_reward = 0
-        #         eval_episode_steps = 0
-
-        #         while True:
-        #             eval_actions = {}
-        #             for agent in env.agents:
-        #                 eval_obs = torch.FloatTensor(eval_observations[agent]).to(device)
-        #                 with torch.no_grad():
-        #                     eval_action_probs, _ = model(eval_obs)
-        #                     eval_dist = Categorical(eval_action_probs)
-        #                     eval_action = eval_dist.sample()
-        #                 eval_actions[agent] = eval_action.item()
-
-        #             eval_next_observations, eval_rewards_dict, eval_terminations, eval_truncations, _ = env.step(eval_actions)
-        #             eval_episode_reward += sum(eval_rewards_dict.values())
-        #             eval_episode_steps += 1
-
-        #             if all(eval_terminations.values()) or all(eval_truncations.values()):
-        #                 break
-
-        #             eval_observations = eval_next_observations
-
-        #         eval_rewards.append(eval_episode_reward)
-        #         eval_steps.append(eval_episode_steps)
-
-        #     avg_eval_reward = np.mean(eval_rewards)
-        #     avg_eval_steps = np.mean(eval_steps)
-
-        #     writer.add_scalar('Evaluation/AverageReward', avg_eval_reward, timestep)
-        #     writer.add_scalar('Evaluation/AverageSteps', avg_eval_steps, timestep)
 
     env.close()
     writer.close()
@@ -418,21 +376,8 @@ if __name__ == "__main__":
         'minibatch_size': 256,
         'clip_epsilon': 0.2,
         'value_coef': 0.5,
-        'entropy_coef': 0.03, #0.02,
+        'entropy_coef': 0.03,
         'gamma': 0.99,
         'gae_lambda': 0.95
     }
     main(hyperparameters=hyperparameters, name='run12_only_archers')
-    
-# first run hyperparameters
-# max_timesteps = 500
-# max_steps = 500
-# buffer = ReplayBuffer(max_size=3000)
-# lr = 0.001 #3e-4
-# reward_scale = 10
-# penalty = 0.01
-# epochs = 8
-# model = ActorCritic(env.action_space('archer_0').n)# , device)
-# optimizer = optim.Adam(model.parameters(), lr=lr)
-# ppo_update(model, optimizer, buffer, clip_epsilon=0.2, value_coef=0.5, entropy_coef=0.01, epochs=4)
-# compute_gae(rewards, values, dones, gamma=0.99, gae_lambda=0.95)
