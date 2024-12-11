@@ -16,6 +16,7 @@ env = knights_archers_zombies_v10.parallel_env(
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 class Actor(nn.Module):
     def __init__(self, action_dim, device=device):
         super(Actor, self).__init__()
@@ -81,6 +82,7 @@ class Critic(nn.Module):
         state_value = self.critic_head(x)
         return state_value
 
+
 actor = Actor(env.action_spaces["archer_0"].n).to(device)
 critic = Critic().to(device)
 
@@ -100,7 +102,11 @@ for game in tqdm(range(num_games)):
     while env.agents:
         actions = {}
         for agent in env.agents:
-            obs = torch.tensor(observations[agent], dtype=torch.float32).unsqueeze(0).to(device)
+            obs = (
+                torch.tensor(observations[agent], dtype=torch.float32)
+                .unsqueeze(0)
+                .to(device)
+            )
             action_probs = actor(obs)
             dist = Categorical(action_probs)
             action = dist.sample().item()
@@ -117,10 +123,10 @@ for game in tqdm(range(num_games)):
 
 # Plotting the results
 plt.figure(figsize=(12, 6))
-plt.plot(range(num_games), rewards_per_game, marker='o')
-plt.xlabel('Game')
-plt.ylabel('Total Reward')
-plt.title('Total Reward per Game')
+plt.plot(range(num_games), rewards_per_game, marker="o")
+plt.xlabel("Game")
+plt.ylabel("Total Reward")
+plt.title("Total Reward per Game")
 
 plt.tight_layout()
-plt.savefig('out/eval_results.png')
+plt.savefig("out/eval_results.png")

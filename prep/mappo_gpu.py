@@ -17,40 +17,43 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 # device = torch.device("cpu")
 
+
 # Actor and Critic networks with CNN moved to device
 class ActorCritic(nn.Module):
     def __init__(self, input_channels, action_dim):
         super(ActorCritic, self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(input_channels, 32, kernel_size=8, stride=4),  # Output: (32, 127, 127)
+            nn.Conv2d(
+                input_channels, 32, kernel_size=8, stride=4
+            ),  # Output: (32, 127, 127)
             nn.ReLU(inplace=False),
             nn.Conv2d(32, 64, kernel_size=4, stride=2),  # Output: (64, 62, 62)
             nn.ReLU(inplace=False),
-            nn.Flatten()
+            nn.Flatten(),
         )
         conv_output_size = 64 * 62 * 62
         self.rnn = nn.GRU(conv_output_size, 256, batch_first=True)
         self.actor = nn.Linear(256, action_dim)
         self.critic = nn.Linear(256, 1)
         self.apply(self._init_weights)
-    
+
     def forward(self, x, h):
         # Ensure input is on the correct device
         x = x.to(device)
         if h is not None:
             h = h.to(device)
-        
+
         batch_size, seq_len, C, H, W = x.size()
-        
+
         # Reshape without using view to avoid potential in-place issues
         x = x.reshape(batch_size * seq_len, C, H, W)
         x = self.conv(x)
         x = x.reshape(batch_size, seq_len, -1)
-        
+
         # Ensure h is initialized correctly if None
         if h is None:
             h = torch.zeros(1, batch_size, 256, device=device)
-        
+
         x, h = self.rnn(x, h)
         policy_logits = self.actor(x)
         value = self.critic(x)
@@ -63,10 +66,11 @@ class ActorCritic(nn.Module):
                 nn.init.zeros_(m.bias)
         elif isinstance(m, nn.GRU):
             for name, param in m.named_parameters():
-                if 'weight' in name:
+                if "weight" in name:
                     nn.init.orthogonal_(param)
-                elif 'bias' in name:
+                elif "bias" in name:
                     nn.init.zeros_(param)
+
 
 # Environment setup
 env = knights_archers_zombies_v10.parallel_env(
@@ -92,12 +96,12 @@ optimizer = optim.Adam(policy_net.parameters(), lr=1e-4)
 popart = PopArt()
 
 # Initialize lists to store losses and rewards
-all_rewards = [] # Store the average reward for each training step
-all_losses = [] # Store the loss for each training step
-total_steps = 10 # Total number of training steps
-batch_size = 1 # number of episodes to collect before updating the networks
-T = 4 # number of trajectories
-chunk_size = 20 # L
+all_rewards = []  # Store the average reward for each training step
+all_losses = []  # Store the loss for each training step
+total_steps = 10  # Total number of training steps
+batch_size = 1  # number of episodes to collect before updating the networks
+T = 4  # number of trajectories
+chunk_size = 20  # L
 
 # Training loop
 step = 0
@@ -105,7 +109,9 @@ with tqdm(total=total_steps, desc="Training") as pbar:
     while step <= total_steps:
         D = []
         episode_rewards = []
-        with tqdm(total=batch_size, desc="Collecting Trajectories", leave=False) as collect_pbar:
+        with tqdm(
+            total=batch_size, desc="Collecting Trajectories", leave=False
+        ) as collect_pbar:
             for _ in range(batch_size):  # batch_size = 4
                 trajectories = {agent: [] for agent in agent_names}
                 h_policies = {agent: None for agent in agent_names}
@@ -118,14 +124,25 @@ with tqdm(total=total_steps, desc="Training") as pbar:
                     values = {}
                     for agent in env.agents:
                         if not done[agent]:
-                            obs_array = np.transpose(obs[agent], (2, 0, 1))  # Convert to (C, H, W)
-                            obs_tensor = torch.tensor(obs_array, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
+                            obs_array = np.transpose(
+                                obs[agent], (2, 0, 1)
+                            )  # Convert to (C, H, W)
+                            obs_tensor = (
+                                torch.tensor(obs_array, dtype=torch.float32)
+                                .unsqueeze(0)
+                                .unsqueeze(0)
+                                .to(device)
+                            )
                             if h_policies[agent] is None:
-                                h_policies[agent] = torch.zeros(1, 1, 256, device=device)
+                                h_policies[agent] = torch.zeros(
+                                    1, 1, 256, device=device
+                                )
                             else:
                                 h_policies[agent] = h_policies[agent].detach()
-                            
-                            policy_logits, value, h_policy = policy_net(obs_tensor, h_policies[agent])
+
+                            policy_logits, value, h_policy = policy_net(
+                                obs_tensor, h_policies[agent]
+                            )
                             dist = Categorical(logits=policy_logits.squeeze(1))
                             action = dist.sample()
                             actions[agent] = action.item()
@@ -137,14 +154,16 @@ with tqdm(total=total_steps, desc="Training") as pbar:
                     next_obs, rewards, terminations, truncations, _ = env.step(actions)
                     for agent in env.agents:
                         if not done[agent]:
-                            trajectories[agent].append({
-                                'obs': obs[agent],
-                                'action': actions[agent],
-                                'log_prob': log_probs[agent],
-                                'value': values[agent],
-                                'reward': rewards[agent],
-                                'done': terminations[agent] or truncations[agent]
-                            })
+                            trajectories[agent].append(
+                                {
+                                    "obs": obs[agent],
+                                    "action": actions[agent],
+                                    "log_prob": log_probs[agent],
+                                    "value": values[agent],
+                                    "reward": rewards[agent],
+                                    "done": terminations[agent] or truncations[agent],
+                                }
+                            )
                             done[agent] = terminations[agent] or truncations[agent]
                             total_reward = total_reward + rewards[agent]
                     obs = next_obs
@@ -159,9 +178,9 @@ with tqdm(total=total_steps, desc="Training") as pbar:
         for trajectories in D:
             for agent in trajectories:
                 traj = trajectories[agent]
-                rewards = [step['reward'] for step in traj]
-                values = [step['value'].item() for step in traj] + [0]
-                dones = [step['done'] for step in traj]
+                rewards = [step["reward"] for step in traj]
+                values = [step["value"].item() for step in traj] + [0]
+                dones = [step["done"] for step in traj]
                 advantages = []
                 gae = 0
                 for i in reversed(range(len(traj))):
@@ -175,25 +194,27 @@ with tqdm(total=total_steps, desc="Training") as pbar:
                 normalized_returns = popart.normalize(returns_np)
                 # Store advantages and normalized returns in trajectory
                 for idx, step_data in enumerate(traj):
-                    step_data['advantage'] = advantages[idx]
-                    step_data['return'] = normalized_returns[idx]
+                    step_data["advantage"] = advantages[idx]
+                    step_data["return"] = normalized_returns[idx]
 
         # Prepare batches and update networks
         # Split trajectories into chunks of length 20 (L = 20)
-        
+
         all_agent_data = []
         for trajectories in D:
             for agent in trajectories:
                 traj = trajectories[agent]
                 for l in range(0, len(traj), chunk_size):
-                    chunk = traj[l:l+chunk_size]
+                    chunk = traj[l : l + chunk_size]
                     all_agent_data.append(chunk)
 
         # Shuffle and create minibatches
         random.shuffle(all_agent_data)
         num_mini_batches = max(1, len(all_agent_data) // 4)  # batch_size = 4
         total_loss = 0
-        with tqdm(total=num_mini_batches, desc="Updating Networks", leave=False) as update_pbar:
+        with tqdm(
+            total=num_mini_batches, desc="Updating Networks", leave=False
+        ) as update_pbar:
             for _ in range(num_mini_batches):
                 minibatch = [all_agent_data.pop() for _ in range(4) if all_agent_data]
                 # Prepare batch data
@@ -203,19 +224,27 @@ with tqdm(total=total_steps, desc="Training") as pbar:
                 returns_batch = []
                 old_log_probs_batch = []
                 for chunk in minibatch:
-                    obs_chunk = np.stack([np.transpose(step['obs'], (2, 0, 1)) for step in chunk])  # Shape: (seq_len, C, H, W)
+                    obs_chunk = np.stack(
+                        [np.transpose(step["obs"], (2, 0, 1)) for step in chunk]
+                    )  # Shape: (seq_len, C, H, W)
                     obs_tensor = torch.from_numpy(obs_chunk).float()
                     obs_batch.append(obs_tensor)
-                    actions_batch.extend([step['action'] for step in chunk])
-                    advantages_batch.extend([step['advantage'] for step in chunk])
-                    returns_batch.extend([step['return'] for step in chunk])
-                    old_log_probs_batch.extend([step['log_prob'] for step in chunk])
+                    actions_batch.extend([step["action"] for step in chunk])
+                    advantages_batch.extend([step["advantage"] for step in chunk])
+                    returns_batch.extend([step["return"] for step in chunk])
+                    old_log_probs_batch.extend([step["log_prob"] for step in chunk])
 
                 # Stack and move batch data to device
-                obs_batch = torch.stack(obs_batch).to(device)  # Shape: [batch_size, seq_len, C, H, W]
+                obs_batch = torch.stack(obs_batch).to(
+                    device
+                )  # Shape: [batch_size, seq_len, C, H, W]
                 actions_batch = torch.tensor(actions_batch, device=device)
-                advantages_batch = torch.tensor(advantages_batch, dtype=torch.float32, device=device)
-                returns_batch = torch.tensor(returns_batch, dtype=torch.float32, device=device)
+                advantages_batch = torch.tensor(
+                    advantages_batch, dtype=torch.float32, device=device
+                )
+                returns_batch = torch.tensor(
+                    returns_batch, dtype=torch.float32, device=device
+                )
                 old_log_probs_batch = torch.stack(old_log_probs_batch).to(device)
 
                 # Reshape tensors to match expected shapes
@@ -226,15 +255,21 @@ with tqdm(total=total_steps, desc="Training") as pbar:
                 old_log_probs_batch = old_log_probs_batch.reshape(batch_size, seq_len)
 
                 # Forward pass
-                policy_logits, value_preds, _ = policy_net(obs_batch, None)  # Shapes: [batch_size, seq_len, action_dim] and [batch_size, seq_len, 1]
+                policy_logits, value_preds, _ = policy_net(
+                    obs_batch, None
+                )  # Shapes: [batch_size, seq_len, action_dim] and [batch_size, seq_len, 1]
                 value_preds = value_preds.squeeze(-1)  # Shape: [batch_size, seq_len]
                 dist = Categorical(logits=policy_logits)
 
                 # Compute new log probabilities
-                new_log_probs = dist.log_prob(actions_batch)  # Shape: [batch_size, seq_len]
+                new_log_probs = dist.log_prob(
+                    actions_batch
+                )  # Shape: [batch_size, seq_len]
 
                 # Reshape tensors for loss computation
-                new_log_probs = new_log_probs.reshape(-1)    # Shape: [batch_size * seq_len]
+                new_log_probs = new_log_probs.reshape(
+                    -1
+                )  # Shape: [batch_size * seq_len]
                 advantages_batch = advantages_batch.reshape(-1)
                 returns_batch = returns_batch.reshape(-1)
                 value_preds = value_preds.reshape(-1)
@@ -254,7 +289,7 @@ with tqdm(total=total_steps, desc="Training") as pbar:
 
                 # Total loss
                 loss = policy_loss + 0.5 * value_loss - 0.01 * entropy
-                
+
                 # Backpropagation
                 optimizer.zero_grad()
                 loss.backward()
@@ -270,16 +305,16 @@ with tqdm(total=total_steps, desc="Training") as pbar:
 # Plot the losses and rewards
 plt.figure()
 plt.plot(all_losses)
-plt.title('Training Loss')
-plt.xlabel('Training Steps')
-plt.ylabel('Loss')
+plt.title("Training Loss")
+plt.xlabel("Training Steps")
+plt.ylabel("Loss")
 plt.show()
 
 plt.figure()
 plt.plot(all_rewards)
-plt.title('Average Episode Reward')
-plt.xlabel('Training Steps')
-plt.ylabel('Reward')
+plt.title("Average Episode Reward")
+plt.xlabel("Training Steps")
+plt.ylabel("Reward")
 plt.show()
 
 env.close()

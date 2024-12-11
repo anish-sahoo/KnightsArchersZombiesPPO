@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 class ActorCritic(nn.Module):
     def __init__(self, action_dim, device=device):
         super(ActorCritic, self).__init__()
@@ -40,7 +41,9 @@ class ActorCritic(nn.Module):
             x = x.unsqueeze(0)  # Add batch dimension: [1, 512, 512, 3]
 
         # Permute dimensions for Conv2D compatibility
-        x = x.permute(0, 3, 1, 2).to(self.device)  # [batch_size, channels, height, width]
+        x = x.permute(0, 3, 1, 2).to(
+            self.device
+        )  # [batch_size, channels, height, width]
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
@@ -51,13 +54,14 @@ class ActorCritic(nn.Module):
         return action_probs, state_value
 
 
-
 def calculate_returns_and_advantages(rewards, values, dones, gamma, gae_lambda):
     returns = []
     advantages = []
     gae = 0
     R = 0
-    for reward, value, done in zip(reversed(rewards), reversed(values), reversed(dones)):
+    for reward, value, done in zip(
+        reversed(rewards), reversed(values), reversed(dones)
+    ):
         R = reward + gamma * R * (1 - done)
         returns.insert(0, R)
         delta = reward + gamma * (0 if done else values[0]) - value
@@ -66,14 +70,16 @@ def calculate_returns_and_advantages(rewards, values, dones, gamma, gae_lambda):
     return torch.tensor(returns).to(device), torch.tensor(advantages).to(device)
 
 
-def ppo_update(model, optimizer, D, clip_param, value_coef, entropy_coef, minibatch_size, epochs):
+def ppo_update(
+    model, optimizer, D, clip_param, value_coef, entropy_coef, minibatch_size, epochs
+):
     actor_losses = []
     critic_losses = []
     entropy_losses = []
     for _ in range(epochs):
         np.random.shuffle(D)
         for i in range(0, len(D), minibatch_size):
-            minibatch = D[i:i + minibatch_size]
+            minibatch = D[i : i + minibatch_size]
             obs, actions, old_log_probs, returns, advantages = zip(*minibatch)
 
             obs = torch.cat(obs).to(device)
@@ -115,40 +121,41 @@ def plot_everything(actor_losses, critic_losses, entropy_losses, episode_rewards
     # Plotting the results
     plt.figure(figsize=(12, 5))
     plt.subplot(1, 3, 1)
-    plt.plot(actor_losses, label='Actor Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title('Actor Loss')
+    plt.plot(actor_losses, label="Actor Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Actor Loss")
     plt.legend()
 
     plt.subplot(1, 3, 2)
-    plt.plot(critic_losses, label='Critic Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title('Critic Loss')
+    plt.plot(critic_losses, label="Critic Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Critic Loss")
     plt.legend()
 
     plt.subplot(1, 3, 3)
-    plt.plot(entropy_losses, label='Entropy Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title('Entropy Loss')
+    plt.plot(entropy_losses, label="Entropy Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Entropy Loss")
     plt.savefig("ppo_losses.png")
 
     plt.figure(figsize=(12, 5))
-    plt.plot(episode_rewards, label='Episode Rewards')
-    plt.xlabel('Episode')
-    plt.ylabel('Reward')
-    plt.title('Episode Rewards')
+    plt.plot(episode_rewards, label="Episode Rewards")
+    plt.xlabel("Episode")
+    plt.ylabel("Reward")
+    plt.title("Episode Rewards")
     plt.legend()
     plt.savefig("ppo.png")
 
+
 # Main Training Loop
 stepmax = 10
-batch_size = 16 #64
+batch_size = 16  # 64
 gamma = 0.99
 gae_lambda = 0.95
-minibatch_size = 4 #16
+minibatch_size = 4  # 16
 ppo_epochs = 4
 clip_param = 0.2
 lr = 3e-4
@@ -166,10 +173,10 @@ env = knights_archers_zombies_v10.parallel_env(
 
 # Apply SuperSuit wrappers to make observations smaller and greyscale
 env = ss.resize_v1(env, x_size=84, y_size=84)
-env = ss.color_reduction_v0(env, mode='full')
+env = ss.color_reduction_v0(env, mode="full")
 
 observations, infos = env.reset()
-model = ActorCritic(env.action_space('archer_0').n).to(device)
+model = ActorCritic(env.action_space("archer_0").n).to(device)
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
 actor_losses, critic_losses, entropy_losses = [], [], []
@@ -190,25 +197,33 @@ with tqdm(total=stepmax) as pbar:
             while steps_in_trajectory < trajectory_size:
                 actions = {}
                 for agent in env.agents:
-                    obs = torch.tensor(observations[agent], dtype=torch.float32).unsqueeze(0).to(device)
+                    obs = (
+                        torch.tensor(observations[agent], dtype=torch.float32)
+                        .unsqueeze(0)
+                        .to(device)
+                    )
                     action_probs, value = model(obs)
                     dist = Categorical(action_probs)
                     action = dist.sample()
                     actions[agent] = action.item()
 
-                    trajectory.append({
-                        "obs": obs,
-                        "action": action,
-                        "value": value.item(),
-                        "log_prob": dist.log_prob(action),
-                    })
+                    trajectory.append(
+                        {
+                            "obs": obs,
+                            "action": action,
+                            "value": value.item(),
+                            "log_prob": dist.log_prob(action),
+                        }
+                    )
                     steps_in_trajectory += 1
 
                     # Stop early if we've reached the desired trajectory size
                     if steps_in_trajectory >= trajectory_size:
                         break
 
-                observations, rewards, terminations, truncations, infos = env.step(actions)
+                observations, rewards, terminations, truncations, infos = env.step(
+                    actions
+                )
                 batch_rewards.append(sum(rewards.values()))
 
                 # If all agents are done, reset the environment
@@ -218,14 +233,24 @@ with tqdm(total=stepmax) as pbar:
             # Assign rewards to the trajectory
             for agent, traj_entry in zip(env.agents, trajectory):
                 traj_entry["reward"] = rewards.get(agent, 0)
-                
-            D.extend(trajectory)
 
+            D.extend(trajectory)
 
         episode_rewards.append(np.mean(batch_rewards))
         # Process data for PPO update
-        ppo_loss = ppo_update(model, optimizer, D, clip_param, value_coef, entropy_coef, minibatch_size, ppo_epochs)
+        ppo_loss = ppo_update(
+            model,
+            optimizer,
+            D,
+            clip_param,
+            value_coef,
+            entropy_coef,
+            minibatch_size,
+            ppo_epochs,
+        )
         pbar.update(1)
 
         if step % 2 == 0:
-            plot_everything(actor_losses, critic_losses, entropy_losses, episode_rewards)
+            plot_everything(
+                actor_losses, critic_losses, entropy_losses, episode_rewards
+            )

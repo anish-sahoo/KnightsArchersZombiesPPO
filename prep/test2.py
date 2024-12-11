@@ -21,7 +21,7 @@ class Actor(nn.Module):
         super().__init__()
         self.rnn = nn.GRU(input_dim, hidden_dim, batch_first=True)
         self.fc = nn.Linear(hidden_dim, action_dim)
-    
+
     def forward(self, obs, hidden):
         rnn_out, hidden = self.rnn(obs, hidden)
         action_logits = self.fc(rnn_out[:, -1])
@@ -33,7 +33,7 @@ class Critic(nn.Module):
         super().__init__()
         self.rnn = nn.GRU(input_dim, hidden_dim, batch_first=True)
         self.fc = nn.Linear(hidden_dim, 1)
-    
+
     def forward(self, state, hidden):
         rnn_out, hidden = self.rnn(state, hidden)
         value = self.fc(rnn_out[:, -1])
@@ -87,18 +87,22 @@ def train(timesteps=1_000_000):
         while True:  # Rollout loop
             actions = {}
             for agent, obs in observations.items():
-                obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)  # (batch_size=1, seq_len, input_size)
+                obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(
+                    0
+                )  # (batch_size=1, seq_len, input_size)
                 logits, hidden_actor[agent] = actor(obs_tensor, hidden_actor[agent])
                 probs = torch.softmax(logits, dim=-1)
                 actions[agent] = torch.multinomial(probs, 1).item()
 
             # Step the environment
-            next_observations, rewards, terminations, truncations, infos = env.step(actions)
+            next_observations, rewards, terminations, truncations, infos = env.step(
+                actions
+            )
             trajectory.append((observations, actions, rewards, terminations, infos))
             global_timesteps += 1
             current_episode_reward += sum(rewards.values())
             global_rewards.append(sum(rewards.values()))
-            
+
             pbar.update(1)
             pbar.set_postfix({"Episodes": episode_count})
 
@@ -117,13 +121,16 @@ def train(timesteps=1_000_000):
         else:
             average_return = sum(episode_rewards) / len(episode_rewards)
         average_returns.append(average_return)
-        
+
         if timesteps % 100000 == 0:
-            plt.plot(range(len(average_returns)), average_returns, label="Average Return")
+            plt.plot(
+                range(len(average_returns)), average_returns, label="Average Return"
+            )
             plt.savefig(f"training_progress-{timesteps}.png")
 
     pbar.close()
     return actor, critic, average_returns
+
 
 actor, critic, average_returns = train(500_000)
 

@@ -11,14 +11,15 @@ from tqdm import tqdm
 
 import prep.PopArt as PopArt
 # Append step data to trajectories
-                
-            # todo: compute advantage estimate using gae on trajectories and popart
-            # todo: compute reward-to-go on trajectories and normalize
-            # todo: split trajectory into chunks of length chunk_size
-            # todo: update D with chunks
-        # todo: update actor and critic using D
-        # adam optimizer update
-        
+
+# todo: compute advantage estimate using gae on trajectories and popart
+# todo: compute reward-to-go on trajectories and normalize
+# todo: split trajectory into chunks of length chunk_size
+# todo: update D with chunks
+# todo: update actor and critic using D
+# adam optimizer update
+
+
 class Actor(nn.Module):
     def __init__(self, action_dim):
         super(Actor, self).__init__()
@@ -43,6 +44,7 @@ class Actor(nn.Module):
         action_probs = F.softmax(self.actor_head(x), dim=-1)
         return action_probs, hidden_state
 
+
 class Critic(nn.Module):
     def __init__(self):
         super(Critic, self).__init__()
@@ -66,7 +68,7 @@ class Critic(nn.Module):
         # Output layer
         state_value = self.critic_head(x)
         return state_value, hidden_state
-    
+
 
 env = knights_archers_zombies_v10.parallel_env(
     render_mode=None,
@@ -82,7 +84,7 @@ env.reset()
 alpha = 0.1
 lr = 0.0001
 
-actor = Actor(env.action_spaces['archer_0'].n)
+actor = Actor(env.action_spaces["archer_0"].n)
 critic = Critic()
 actor_optimizer = optim.Adam(actor.parameters(), lr=lr)
 critic_optimizer = optim.Adam(critic.parameters(), lr=lr)
@@ -103,7 +105,7 @@ action_dim = action_space.n
 step = 0
 pbar = tqdm(total=stepmax, desc="Timesteps")
 while step <= stepmax:
-    D = [] # replay buffer
+    D = []  # replay buffer
     with torch.no_grad():
         # calculate trajectory for each batch
         for _ in range(batch_size):
@@ -117,6 +119,7 @@ while step <= stepmax:
                     action_dist = Categorical(actor(obs))
                     action = action_dist.sample()
                     actions[agent] = action.item()
-                
-                observations, rewards, terminations, truncations, infos = env.step(actions)
-                
+
+                observations, rewards, terminations, truncations, infos = env.step(
+                    actions
+                )
